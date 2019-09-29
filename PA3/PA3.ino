@@ -1,6 +1,6 @@
 #include <Servo.h>
 
-int Speed = 128;
+int Speed = 200;
 
 // initialize first motor
 int pinOut1 = 6;
