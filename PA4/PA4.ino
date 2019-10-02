@@ -60,7 +60,7 @@ void loop() {
 
 
 // set speed output to the set speed var
-void setOutput(int spd) {
+void setOutput(float spd) {
   // write speed output 
   analogWrite(pinOut2, spd);  
   analogWrite(pinOut1, spd);
@@ -69,7 +69,7 @@ void setOutput(int spd) {
 
 // move robot forwards
 void moveForward(int t, int spd) { 
-  int s = 0;
+  float s = 0.0;
   
   setOutput(0);
   
@@ -83,18 +83,18 @@ void moveForward(int t, int spd) {
 
   // acceleration stuff here
   while(s <= spd ) {
-        s = s + 5; // ADJUST acceleration amount
+        s = s + 0.5; // ADJUST acceleration amount
         setOutput(s);
-        delay(50); 
+        delay(10);
   }
 
-  delay(t - 500); // ADJUST when to begin deceleration
+  delayMicroseconds(t * 100); // ADJUST when to begin deceleration
 
   // deceleration stuff here
   while(s >= 0 ) {
-        s = s - 5; // ADJUST deceleration amount
+        s = s - 0.5; // ADJUST deceleration amount
         setOutput(s);
-        delay(50); 
+        delay(10);
   }
 
   setOutput(0);
