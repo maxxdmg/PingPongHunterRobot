@@ -1,8 +1,6 @@
 #define M_PI 3.14159265358979323846
 
-int Speed = 100; // ADJUST this to increase/decrease power
-int Distance = 0;
-int Angle = 0;
+float Speed = 127.0; // ADJUST this to increase/decrease power
 
 // initialize first motor
 int pinOut1 = 6;
@@ -11,67 +9,56 @@ int pinBackward1 = 7;
 
 // initialize second motor
 int pinOut2 = 5;
-int pinForward2 = 13;
-int pinBackward2 = 12;
+int pinForward2 = 12;
+int pinBackward2 = 13;
 
-int timeToSpin240 = 800; // ADJUST how long to turn the robot counter clockwise 240, spins too short -> increase, spins too long -> decrease
-int timeToSpin180 = 600; // ADJUST how long to turn the robot counter clockwise 240, spins too short -> increase, spins too long -> decrease
+int timeToSpin240 = 100; // ADJUST how long to turn the robot counter clockwise 240, spins too short -> increase, spins too long -> decrease
+int timeToSpin180 = 30; // ADJUST how long to turn the robot counter clockwise 240, spins too short -> increase, spins too long -> decrease
 
 void setup() {
+  pinMode(pinOut1, OUTPUT);
+  pinMode(pinForward1, OUTPUT);
+  pinMode(pinBackward1, OUTPUT);
+
+  pinMode(pinOut2, OUTPUT);
+  pinMode(pinForward2, OUTPUT);
+  pinMode(pinBackward2, OUTPUT);
+}
+
+void loop() { 
   
-}
+  moveForward(3000, Speed);
 
-void loop() {
-  moveForward(1000, Speed);
+  rotateCounterClockwise(Speed);
+  
+  moveForward(3000, Speed);
 
- /*
-  rotateCounterClockwise(timeToSpin240, Speed);  
-  delay(5);
+  rotateCounterClockwise(Speed);
 
-  moveForward(1000, Speed);
-  delay(5);
+  moveForward(3000, Speed);
 
-  rotateCounterClockwise(timeToSpin240, Speed);
-  delay(5);
+  rotate180(Speed);
 
-  moveForward(1000, Speed);
-  delay(5);
+  moveForward(3000, Speed);
 
-  rotateCounterClockwise(timeToSpin180, Speed);
-  delay(5);
+  rotateClockwise(Speed);
 
-  moveForward(1000, Speed);
-  delay(5);
+  moveForward(3000, Speed);
 
-  rotateCounterClockwise(timeToSpin240, Speed);
-  delay(5);
+  rotateClockwise(Speed);
 
-  moveForward(1000, Speed);
-  delay(5);
-
-  rotateCounterClockwise(timeToSpin240, Speed);
-  delay(5);
-
-  moveForward(1000, Speed);
-  delay(5);  */
-    
-  delay(10000);
-}
-
-
-// set speed output to the set speed var
-void setOutput(float spd) {
-  // write speed output 
-  analogWrite(pinOut2, spd);  
-  analogWrite(pinOut1, spd);
+  analogWrite(pinOut1, 0);
+  analogWrite(pinOut2, 0);
+  delay(13000);
 }
 
 
 // move robot forwards
-void moveForward(int t, int spd) { 
+void moveForward(int t, float spd) { 
   float s = 0.0;
   
-  setOutput(0);
+  analogWrite(pinOut2, 0);  
+  analogWrite(pinOut1, 0);
   
   // move first motor 
   digitalWrite(pinForward1, HIGH);
@@ -83,31 +70,31 @@ void moveForward(int t, int spd) {
 
   // acceleration stuff here
   while(s <= spd ) {
-        s = s + 0.5; // ADJUST acceleration amount
-        setOutput(s);
-        delay(10);
+        s = s + 1; // ADJUST acceleration amount
+        analogWrite(pinOut2, s);
+        analogWrite(pinOut1, s);  
+        delayMicroseconds(100);      
   }
 
-  delayMicroseconds(t * 100); // ADJUST when to begin deceleration
+  // in b/w acceleration and deceleration
+  analogWrite(pinOut2, spd);
+  analogWrite(pinOut1, spd  + spd / 2);
+  delay(t);
 
   // deceleration stuff here
   while(s >= 0 ) {
-        s = s - 0.5; // ADJUST deceleration amount
-        setOutput(s);
-        delay(10);
+        s = s - 1; // ADJUST deceleration amount
+        analogWrite(pinOut2, s);
+        analogWrite(pinOut1, s);
+        delayMicroseconds(100);    
   }
 
-  setOutput(0);
 }
 
 
-// rotate robot counter clockwise 240 degrees
-void rotateCounterClockwise(int t, int spd) {
-  int s = 0;
-  int currTime = 0;
-  int prevTime = 0;
-
-  setOutput(0);
+void rotateCounterClockwise(float spd) {  
+  analogWrite(pinOut2, 0);
+  analogWrite(pinOut1, 0);
   
   // move first motor
   digitalWrite(pinForward1, LOW);
@@ -117,20 +104,45 @@ void rotateCounterClockwise(int t, int spd) {
   digitalWrite(pinForward2, HIGH);
   digitalWrite(pinBackward2, LOW);
 
-  // acceleration stuff here
-  while(s <= spd ) {
-        s = s + 5; // ADJUST acceleration amount
-        setOutput(s);
-        delay(50); 
-  }
+  analogWrite(pinOut2, spd * 2);
+  analogWrite(pinOut1, spd * 2);
+  delay(1700);
 
-  delay(t);
+}
 
-  // deceleration stuff here
-  while(s >= 0 ) {
-        s = s - 5; // ADJUST deceleration amount
-        setOutput(s);
-        delay(50); 
-  }
-  setOutput(0);
+
+void rotate180(float spd) { 
+  analogWrite(pinOut2, 0);
+  analogWrite(pinOut1, 0);
+  
+  // move first motor
+  digitalWrite(pinForward1, LOW);
+  digitalWrite(pinBackward1, HIGH);
+
+  // move second motor move opposite
+  digitalWrite(pinForward2, HIGH);
+  digitalWrite(pinBackward2, LOW);
+
+  analogWrite(pinOut2, spd * 2);
+  analogWrite(pinOut1, spd * 2);
+  delay(1300);
+}
+
+
+void rotateClockwise(float spd) {  
+  analogWrite(pinOut2, 0);
+  analogWrite(pinOut1, 0);
+  
+  // move first motor
+  digitalWrite(pinForward1, HIGH);
+  digitalWrite(pinBackward1, LOW);
+
+  // move second motor move opposite
+  digitalWrite(pinForward2, LOW);
+  digitalWrite(pinBackward2, HIGH);
+
+  analogWrite(pinOut2, spd * 2);
+  analogWrite(pinOut1, spd * 2);
+  delay(1700);
+
 }
