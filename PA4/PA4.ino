@@ -1,18 +1,18 @@
 #define M_PI 3.14159265358979323846
 
 // initialize first motor
-int pinOut1 = 6;
-int pinForward1 = 8;
-int pinBackward1 = 7;
+int pinOut1 = 3;
+int pinForward1 = 9;
+int pinBackward1 = 8;
 
 // initialize second motor
-int pinOut2 = 5;
-int pinForward2 = 12;
-int pinBackward2 = 13;
+int pinOut2 = 6;
+int pinForward2 = 4;
+int pinBackward2 = 5;
 
 int timeToSpin240 = 2000; 
 int timeToSpin180 = 1300;
-float Speed = 127.0; // ADJUST this to increase/decrease power
+int Speed = 225;
 
 void setup() {
   pinMode(pinOut1, OUTPUT);
@@ -26,87 +26,23 @@ void setup() {
 
 void loop() { 
   // set motor speed
-  analogWrite(pinOut1, Speed);
+  analogWrite(pinOut1, Speed * 2);
   analogWrite(pinOut2, Speed);
-  
-  // move forward
+
+  moveForward(); 
+
+}
+
+void moveForward() {
   digitalWrite(pinForward1, HIGH);
   digitalWrite(pinBackward1, LOW);
   digitalWrite(pinForward2, HIGH);
   digitalWrite(pinBackward2, LOW);
-  delay(3000);
+}
 
-  // rotate counter clockwise 240
+void turnRight() {
   digitalWrite(pinForward1, HIGH);
   digitalWrite(pinBackward1, LOW);
   digitalWrite(pinForward2, LOW);
-  digitalWrite(pinBackward2, HIGH);
-  delay(timeToSpin240);
-
-  // move forward
-  digitalWrite(pinForward1, HIGH);
-  digitalWrite(pinBackward1, LOW);
-  digitalWrite(pinForward2, HIGH);
   digitalWrite(pinBackward2, LOW);
-  delay(3000);
-
-  // rotate counter clockwise 240
-  digitalWrite(pinForward1, HIGH);
-  digitalWrite(pinBackward1, LOW);
-  digitalWrite(pinForward2, LOW);
-  digitalWrite(pinBackward2, HIGH);
-  delay(timeToSpin240);
-
-  // move forward
-  digitalWrite(pinForward1, HIGH);
-  digitalWrite(pinBackward1, LOW);
-  digitalWrite(pinForward2, HIGH);
-  digitalWrite(pinBackward2, LOW);
-  delay(3000);
-
-  // rotate counter clockwise 180
-  digitalWrite(pinForward1, HIGH);
-  digitalWrite(pinBackward1, LOW);
-  digitalWrite(pinForward2, LOW);
-  digitalWrite(pinBackward2, HIGH);
-  delay(timeToSpin180);
-
-
-  // move forward
-  digitalWrite(pinForward1, HIGH);
-  digitalWrite(pinBackward1, LOW);
-  digitalWrite(pinForward2, HIGH);
-  digitalWrite(pinBackward2, LOW);
-  delay(3000);
-
-  // rotate clockwise 240
-  digitalWrite(pinForward1, LOW);
-  digitalWrite(pinBackward1, HIGH);
-  digitalWrite(pinForward2, HIGH);
-  digitalWrite(pinBackward2, LOW);
-  delay(timeToSpin240);
-
-  // move forward
-  digitalWrite(pinForward1, HIGH);
-  digitalWrite(pinBackward1, LOW);
-  digitalWrite(pinForward2, HIGH);
-  digitalWrite(pinBackward2, LOW);
-  delay(3000);
-
-  // rotate clockwise 240
-  digitalWrite(pinForward1, LOW);
-  digitalWrite(pinBackward1, HIGH);
-  digitalWrite(pinForward2, HIGH);
-  digitalWrite(pinBackward2, LOW);
-  delay(timeToSpin240);
-
-
-  // move forward
-  digitalWrite(pinForward1, HIGH);
-  digitalWrite(pinBackward1, LOW);
-  digitalWrite(pinForward2, HIGH);
-  digitalWrite(pinBackward2, LOW);
-  delay(3000);
-  
-  delay(13000);
 }
