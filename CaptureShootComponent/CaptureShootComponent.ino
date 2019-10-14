@@ -1,14 +1,21 @@
 #import <Servo.h>
 
-int servoLeftPin = 9;
-int servoRightPin = 10;
-int trigPin = 5;
-int echoPin = 6;
+int servoPin = 10;
+int trigPin = 11;
+int echoPin = 12;
 int duration = 0;
 int distance = 0;
 int ballInCacheDistance = 5;
 Servo servoLeft;
 Servo servoRight;
+
+int pinOut1 = 6;
+int pinForward1 = 8;
+int pinBackward1 = 7;
+int pinOut2 = 3;
+int pinForward2 = 4;
+int pinBackward2 = 5;
+int Speed = 75;
 
 void setup() {
   Serial.begin(9600);
@@ -16,17 +23,19 @@ void setup() {
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
   // set servos
-  servoLeft.attach(servoLeftPin);
-  servoRight.attach(servoRightPin);
+  servoLeft.attach(9);
+  servoRight.attach(0);
 }
 
 void loop() {
+  analogWrite(pinOut1, Speed);
+  analogWrite(pinOut2, Speed);
   flushInput();
   
   duration = pulseIn(echoPin, HIGH); // read input from echo
   
   distance = getDistance(duration); // convert time -> distance in cm
-
+  Serial.println(distance);
   // handle distances
   if (distance <= ballInCacheDistance) {
     // there is a ball in cache
@@ -34,8 +43,10 @@ void loop() {
     servoShoot();
   } else {
     Serial.println("Cache empty");
+    digitalWrite(pinForward2, HIGH);
+    digitalWrite(pinForward1, HIGH);
     servoCapture();
-  }
+  } 
 }
 
 void servoStop () {
