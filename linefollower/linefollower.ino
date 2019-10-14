@@ -1,30 +1,27 @@
 #include <Wire.h>
 #define uchar unsigned char
+#define COMP1 0
 #define M_PI 3.14159265358979323846
 
 // initialize line sensor
 uchar t;
-int linevalue = 246;
+int linevalue = 245;
 uchar data[16];
-
-// initialize first motor
+boolean left = false;
+boolean middle = false;
+boolean right = false;
 int pinOut1 = 6;
-int pinForward1 = 9;
-int pinBackward1 = 8;
-
-// initialize second motor
+int pinForward1 = 8;
+int pinBackward1 = 7;
 int pinOut2 = 3;
 int pinForward2 = 4;
 int pinBackward2 = 5;
-
-int Speed = 120;
-
+int Speed = 70;
 enum states {
   FREE,
   TRIGGERED,
   SHIFTLEFT,
   SHIFTRIGHT,
-  STRAIGHTEN,
   CENTERED
 } state;
 
@@ -37,15 +34,12 @@ void setup() {
   pinMode(pinForward2, OUTPUT);
   pinMode(pinBackward2, OUTPUT);
 
-  pinMode(12, OUTPUT);
-  pinMode(11, OUTPUT);
-  pinMode(10, OUTPUT);
-
+  pinMode(13, OUTPUT);
   // set up line sensor
   Wire.begin();
   t = 0;
   state = FREE;
-  analogWrite(pinOut1, Speed * 1.5);
+  analogWrite(pinOut1, Speed - COMP1);
   analogWrite(pinOut2, Speed);
   Serial.begin(9600);  // start serial for output
 }
@@ -59,117 +53,107 @@ void loop() {
     case TRIGGERED:
       handleTriggeredState();
       break;
-    case CENTERED:
-      state = FREE;
-      break;
     case SHIFTRIGHT:
-      handleStateShiftRight();
-      break;
-    case STRAIGHTEN:
-      handleStateStraighten();
+      handleShiftRightState();
       break;
     case SHIFTLEFT:
-      handleStateShiftLeft();
+      handleShiftLeftState();
       break;
     default:
       break;
-  }
-  //Serial.println(state);
+  } 
+  
+  Serial.println(state);
 }
 
 
 void handleFreeState() {
   runLineSensor();
-  int i = 0;
-  for (i=0; i<16; i++){
-    if (data[i] <= linevalue) {
-      state = TRIGGERED;
-      return;
-    }
-    i++;
+  if ((left || right) && !middle) {
+    state = TRIGGERED;
+    stopMotors();
+    return;
+  } else {
+    moveForward();
   }
-  
-  moveForward();
 }
 
 
 void handleTriggeredState() {
-  stopMotors();
-  
-  // check for QTR sensors being centered
-  if (data[6] <= linevalue || data[8] <= linevalue)
-    state = CENTERED;
-  else {
-    // check left QTR sensors
-    int i = 0;
-    while (i < 6) {
-      if (data[i] <= linevalue) {
-        state = SHIFTLEFT;
-        break;
-      }
-      i+=2;
-    }
-  
-    // check right QTR sensors
-    i = 14;
-    while (i > 8) {
-      if (data[i] <= linevalue) {
-        state = SHIFTRIGHT;
-        break;
-      }
-      i-=2;
-    }
+  runLineSensor();
+  /*
+  Serial.print(left);
+  Serial.print(middle);
+  Serial.println(right); 
+  */
+  if (left) {
+    state = SHIFTLEFT;
+  } else if (right) {
+    state = SHIFTRIGHT;
+  } else {
+    state = FREE;
   }
 }
 
 
-void handleStateShiftRight() {
+void handleShiftRightState() {
   // while the leftmost sensors do not see a line, turn right
-  while(data[0] > linevalue && data[2] > linevalue && data[4] > linevalue && data[6] > linevalue) {
+  analogWrite(pinOut1, Speed + 16 - COMP1);
+  analogWrite(pinOut2, Speed + 16);
+  turnRight();
+  for (int i=0; i < 400; i++) {
     runLineSensor();
-    turnRight();
+    if (data[6] <= linevalue || data[8] <= linevalue) break;
+    Serial.println(i);
   }
+  analogWrite(pinOut1, Speed - COMP1);
+  analogWrite(pinOut2, Speed);
   stopMotors();
-  state = STRAIGHTEN;
+  state = FREE;
 }
 
 
-void handleStateShiftLeft() {
-  // while the rightmost sensors do not see a line, turn left
-  while(data[14] > linevalue && data[12] > linevalue && data[10] > linevalue && data[8] > linevalue) {
+void handleShiftLeftState() {
+  // while the leftmost sensors do not see a line, turn right
+  analogWrite(pinOut1, Speed + 16 - COMP1);
+  analogWrite(pinOut2, Speed + 16);
+  turnLeft();
+  for (int i=0; i < 400; i++) {
     runLineSensor();
-    turnLeft();
+    if (data[6] <= linevalue || data[8] <= linevalue) break;
+    Serial.println(i);
   }
+  analogWrite(pinOut1, Speed - COMP1);
+  analogWrite(pinOut2, Speed);
   stopMotors();
-  state = STRAIGHTEN;
-}
-
-
-void handleStateStraighten() {
-  // while the middle sensors do not see a line, straighten to the left
-  while(data[6] > linevalue && data[8] > linevalue) {
-    runLineSensor();
-    turnLeft();
-  }
-  stopMotors();
-  state = CENTERED;
+  state = FREE;
 }
 
 
 void runLineSensor() {
+  digitalWrite(13, LOW);
   Wire.requestFrom(9, 16);
+  digitalWrite(13, HIGH);
   while (Wire.available()) {
     data[t] = Wire.read();
     if (t < 15) t++;
     else t = 0;
   }
 
+  if (data[0] <= linevalue || data[2] <= linevalue) left = true;
+  else left = false;
+
+  if (data[4] <= linevalue || data[6] <= linevalue || data[8] <= linevalue || data[10] <= linevalue) middle = true;
+  else middle = false;
+
+  if (data[14] <= linevalue || data[12] <= linevalue) right = true;
+  else right = false;
+  
   for (int i=0; i<16; i++) {
     Serial.print(data[i]);
     Serial.print(" ");
   }
   Serial.println("");
-  delay(1000);
 }
 
 
@@ -180,14 +164,14 @@ void moveForward() {
   digitalWrite(pinBackward2, LOW);
 }
 
-void turnRight() {
+void turnLeft() {
   digitalWrite(pinForward1, HIGH);
   digitalWrite(pinBackward1, LOW);
   digitalWrite(pinForward2, LOW);
   digitalWrite(pinBackward2, HIGH);
 }
 
-void turnLeft() {
+void turnRight() {
   digitalWrite(pinForward1, LOW);
   digitalWrite(pinBackward1, HIGH);
   digitalWrite(pinForward2, HIGH);
