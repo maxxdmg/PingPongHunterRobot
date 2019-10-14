@@ -69,7 +69,9 @@ void loop() {
 
 void handleFreeState() {
   runLineSensor();
-  if ((left || right) && !middle) {
+  if (left && middle && right) {
+    moveForward();
+  } else if (left || right) {
     state = TRIGGERED;
     stopMotors();
     return;
