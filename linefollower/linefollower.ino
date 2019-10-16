@@ -1,39 +1,41 @@
 #include <Wire.h>
 #include <Servo.h>
 #define uchar unsigned char
-#define COMP1 20
+#define COMP1 -20
 #define M_PI 3.14159265358979323846
 
 // initialize line sensor
 uchar t;
-int linevalue = 245;
+int linevalue = 243;
 uchar data[16];
 boolean cacheEmpty = true;
 boolean left = false;
 boolean middle = false;
 boolean right = false;
+boolean goal = false;
 int pinOut1 = 6;
 int pinForward1 = 8;
 int pinBackward1 = 7;
 int pinOut2 = 3;
-int pinForward2 = 4;
-int pinBackward2 = 5;
-int Speed = 75;
-int pinServo = 9;
-int pinTrig = 11;
-int pinEcho = 12;
-int distance = 0;
-int duration = 0;
-int cachedistance = 16;
+int pinForward2 = 5;
+int pinBackward2 = 4;
+int Speed = 122;
+int pinServo = 0;
+int pinGoalSwitch = 10;
+
 enum states {
   FREE,
   TRIGGERED,
   SHIFTLEFT,
   SHIFTRIGHT,
   CENTERED,
+  GOAL,
+  TURNQUARTER,
+  TRIGGEREDBACK,
   SHOOT
 } state;
 Servo servo;
+
 
 void setup() {
   // set up motors
@@ -43,9 +45,7 @@ void setup() {
   pinMode(pinOut2, OUTPUT);
   pinMode(pinForward2, OUTPUT);
   pinMode(pinBackward2, OUTPUT);
-  pinMode(pinServo, OUTPUT);
-  pinMode(pinTrig, OUTPUT);
-  pinMode(pinEcho, INPUT);
+  pinMode(pinGoalSwitch, INPUT);
   
   Wire.begin();
   t = 0;
@@ -65,47 +65,51 @@ void loop() {
   switch(state) {
     case FREE:
       handleFreeState();
-      servo.write(110);
       break;
     case TRIGGERED:
       handleTriggeredState();
-      servo.write(110);
+      break;
+    case TRIGGEREDBACK:
+      handleTriggeredBackState();
       break;
     case SHIFTRIGHT:
       handleShiftRightState();
-      servo.write(110);
       break;
     case SHIFTLEFT:
       handleShiftLeftState();
-      servo.write(110);
       break;
     case SHOOT:
       handleShootState();
       break;
+    case GOAL:
+      handleGoalState();
+      break;
+    case TURNQUARTER:
+      handleTurnState();
     default:
+      state = FREE;
       break;
   } 
-
   Serial.println(state);  
 }
 
 
 void handleFreeState() {
-  if(!checkCache()) {
-    Serial.println("HIT");
-    state = SHOOT;
-    return;
-  }
   runLineSensor();
-  if (left && middle && right) {
-    analogWrite(pinOut1, Speed + 16 - COMP1);
-    analogWrite(pinOut2, Speed + 16);
-    while (left && middle && right) {
+  if (digitalRead(pinGoalSwitch)) {
+    state = GOAL;
+    goal = true;
+    return;
+  } else if (right && middle && left) {
+    analogWrite(pinOut1, Speed * 2 - COMP1);
+    analogWrite(pinOut2, Speed * 2);
+    while (right && middle && left) {
+      runLineSensor();
       moveForward();
-    } 
-    runLineSensor();
+    }
     analogWrite(pinOut1, Speed - COMP1);
     analogWrite(pinOut2, Speed);
+    return;
   } else if (left || right) {
     state = TRIGGERED;
     stopMotors();
@@ -123,13 +127,76 @@ void handleTriggeredState() {
   Serial.print(middle);
   Serial.println(right); 
   */
-  if (left) {
+  if (right && left) {
+    state = FREE;
+  } else if (left) {
     state = SHIFTLEFT;
   } else if (right) {
     state = SHIFTRIGHT;
   } else {
     state = FREE;
   }
+}
+
+
+void handleTriggeredBackState() {
+  runLineSensor();
+  /*
+  Serial.print(left);
+  Serial.print(middle);
+  Serial.println(right); 
+  */
+  if (right && left) {
+    state = GOAL;
+  } else if (left) {
+    state = SHIFTRIGHT;
+  } else if (right) {
+    state = SHIFTLEFT;
+  } else {
+    state = GOAL;
+  }
+}
+
+
+/*
+void handleGoalState() {
+  moveBackward();
+  while (!(right && middle && left)) {
+      runLineSensor();
+      if (right && middle && left) break;
+  }
+  stopMotors(); 
+  state = TURNQUARTER;
+}*/
+
+void handleGoalState() {
+  runLineSensor();
+  moveBackward();
+  if (right && middle && left) {
+    state = TURNQUARTER;
+    goal = false;
+    return;
+  } else if (left || right) {
+    state = TRIGGEREDBACK;
+    stopMotors();
+    return;
+  } else {
+    moveBackward();
+  }
+}
+
+
+void handleTurnState() {
+  turnRight();
+  for (int i=0; i<500; i++) {
+    Serial.println(i);
+  }
+  stopMotors();
+  turnRight();
+  while (!(middle && left && right)) {
+    if (middle && (right || left)) break;
+  }
+  state = FREE;
 }
 
 
@@ -147,6 +214,7 @@ void handleShiftRightState() {
   analogWrite(pinOut2, Speed);
   stopMotors();
   state = FREE;
+  if (goal) state = GOAL;
 }
 
 
@@ -158,12 +226,13 @@ void handleShiftLeftState() {
   for (int i=0; i < 400; i++) {
     runLineSensor();
     if (data[6] <= linevalue || data[8] <= linevalue) break;
-    Serial.println(i);
+    //Serial.println(i);
   }
   analogWrite(pinOut1, Speed - COMP1);
   analogWrite(pinOut2, Speed);
   stopMotors();
   state = FREE;
+  if (goal) state = GOAL;
 }
 
 
@@ -205,44 +274,8 @@ void handleShootState() {
 
   moveBackward();
   for (int i=0; i<300; i++);
-  
-  while (!checkCache()) {
-    Serial.println("Cache not empty");
-  }
   stopMotors();
 }
-
-
-int checkCache() {
-    flushInput();
-    duration = pulseIn(pinEcho, HIGH);
-    distance = getDistance(duration);
-  
-    Serial.print("Distance: ");
-    Serial.println(distance);
-
-  if (distance < cachedistance) return 0;
-  return 1;
-}
-
-
-void flushInput() {
-  // flush analog pulse measurement
-  digitalWrite(pinTrig, LOW);
-  delayMicroseconds(5);  
-
-  // output trigPin for 10 ms
-  digitalWrite(pinTrig, HIGH);
-  delayMicroseconds(5);
-  digitalWrite(pinTrig, LOW);
-}
- 
-
-long getDistance(int dur) {
-  long d = (dur / 2) / 29.1;  
-  return d;
-}
-
 
 void moveForward() {
   digitalWrite(pinForward1, HIGH);
