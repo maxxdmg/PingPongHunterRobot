@@ -1,138 +1,111 @@
 #include <Wire.h>
+#include "robot.h"
 #define uchar unsigned char
 #define COMP1 0
-#define M_PI 3.14159265358979323846
 
 // initialize line sensor
 uchar t;
 int linevalue = 244;
 uchar data[16];
+boolean lineValues[3] = {false, false, false};
+boolean newLineValues[3] = {false, false, false};
 boolean left = false;
 boolean middle = false;
 boolean right = false;
-int pinOut1 = 6;
-int pinForward1 = 8;
-int pinBackward1 = 7;
-int pinOut2 = 3;
-int pinForward2 = 4;
-int pinBackward2 = 5;
-int Speed = 70;
-enum states {
-  FREE,
-  TRIGGERED,
-  SHIFTLEFT,
-  SHIFTRIGHT,
-  CENTERED
-} state;
+
+// set up motors
+robotMotors motors;
+robot robo;
 
 void setup() {
-  // set up motors
-  pinMode(pinOut1, OUTPUT);
-  pinMode(pinForward1, OUTPUT);
-  pinMode(pinBackward1, OUTPUT);
-  pinMode(pinOut2, OUTPUT);
-  pinMode(pinForward2, OUTPUT);
-  pinMode(pinBackward2, OUTPUT);
-
-  pinMode(13, OUTPUT);
   // set up line sensor
   Wire.begin();
   t = 0;
-  state = FREE;
-  analogWrite(pinOut1, Speed - COMP1);
-  analogWrite(pinOut2, Speed);
+  
+  // set up line sensor data containers
+  runLineSensor(); // run line sensor
+  setNewLineValues(&robo);
+
+  // init robo->state
+  robo.state = FREE;
+  robo.motors = motors;
+  
   Serial.begin(9600);  // start serial for output
-  runLineSensor();
+  
 }
 
 
 void loop() { 
-  switch(state) {
+  switch(robo.state) {
     case FREE:
-      handleFreeState();
+      handleFreeState(&robo);
       break;
     case TRIGGERED:
-      handleTriggeredState();
+      handleTriggeredState(&robo);
       break;
     case SHIFTRIGHT:
-      handleShiftRightState();
+      handleShiftRightState(&robo);
       break;
     case SHIFTLEFT:
-      handleShiftLeftState();
+      handleShiftLeftState(&robo);
       break;
     default:
       break;
   } 
   
-  //Serial.println(state);
+  //Serial.println(robo->state);
 }
 
 
-void handleFreeState() {
+void handleFreeState(struct robot *robo) {
   runLineSensor();
-  if (left && middle && right) {
-    moveForward();
-  } else if ((left || right) && !middle) {
-    state = TRIGGERED;
-    stopMotors();
-    return;
+  if (!compareLineValues()) {
+    robo->state = TRIGGERED;
   } else {
-    moveForward();
+    moveForward(robo);
+  }
+  verifySequence(robo);
+  setNewLineValues(robo);
+}
+
+
+void handleTriggeredState(struct robot *robo) {
+  if ((middle && right && left) || (!middle && right && left) || (!middle && right && !left)) {
+    robo->state = SHIFTRIGHT;
+  } else if (!middle && !right && left) {
+    robo->state = SHIFTLEFT;
+  } else {
+    robo->state = FREE;
   }
 }
 
 
-void handleTriggeredState() {
-  runLineSensor();
-  /*
-  Serial.print(left);
-  Serial.print(middle);
-  Serial.println(right); 
-  */
-  if (left) {
-    state = SHIFTLEFT;
-  } else if (right) {
-    state = SHIFTRIGHT;
-  } else {
-    state = FREE;
-  }
-}
-
-
-void handleShiftRightState() {
-  // while the leftmost sensors do not see a line, turn right
-  analogWrite(pinOut1, Speed + 16 - COMP1);
-  analogWrite(pinOut2, Speed + 16);
-  turnRight();
+void handleShiftRightState(struct robot *robo) {
+  turnRight(robo);
+  
   for (int i=0; i < 400; i++) {
     runLineSensor();
-    if (data[6] <= linevalue || data[8] <= linevalue) break;
-    //Serial.println(i);
+    if (middle) break;
   }
-  analogWrite(pinOut1, Speed - COMP1);
-  analogWrite(pinOut2, Speed);
-  stopMotors();
-  state = FREE;
+  
+  stopMotors(robo); // stop motors
+  setNewLineValues(robo); // reset line values
+  robo->state = FREE;
 }
 
 
-void handleShiftLeftState() {
-  // while the leftmost sensors do not see a line, turn right
-  analogWrite(pinOut1, Speed + 16 - COMP1);
-  analogWrite(pinOut2, Speed + 16);
-  turnLeft();
+void handleShiftLeftState(struct robot *robo) {
+  turnLeft(robo);
+  
   for (int i=0; i < 400; i++) {
     runLineSensor();
-    if (data[6] <= linevalue || data[8] <= linevalue) break;
-    //Serial.println(i);
+    if (middle) break;
   }
-  analogWrite(pinOut1, Speed - COMP1);
-  analogWrite(pinOut2, Speed);
-  stopMotors();
-  state = FREE;
+  
+  stopMotors(robo); // stop motors
+  setNewLineValues(robo); // reset line values
+  robo->state = FREE;
 }
-
-
 void runLineSensor() {
   digitalWrite(13, LOW);
   Wire.requestFrom(9, 16);
@@ -142,48 +115,65 @@ void runLineSensor() {
     if (t < 15) t++;
     else t = 0;
   }
-
   if (data[0] <= linevalue || data[2] <= linevalue) left = true;
   else left = false;
-
   if (data[4] <= linevalue || data[6] <= linevalue || data[8] <= linevalue || data[10] <= linevalue) middle = true;
   else middle = false;
-
   if (data[14] <= linevalue || data[12] <= linevalue) right = true;
   else right = false;
-  
-  for (int i=0; i<16; i++) {
-    Serial.print(data[i]);
-    Serial.print(" ");
+  newLineValues[0] = left;
+  newLineValues[1] = middle;
+  newLineValues[2] = right;
+}
+boolean compareLineValues() {
+  for (int i=0; i<3; i++) {
+    if (newLineValues[i] != lineValues[i])
+      return false;
   }
-  Serial.println("");
+  return true;
+}
+void setNewLineValues(struct robot *robo) {
+  for (int i=0; i<3; i++)
+    lineValues[i] = newLineValues[i];
+}
+boolean verifySequence(struct robot *robo) {
+  if ((lineValues[0] && !lineValues[1] && !lineValues[2]) && (!newLineValues[0] && !newLineValues[1] && newLineValues[2])) {
+    setNewLineValues(robo);
+    robo->state = FREE;
+    return 0;
+  }
+  return 1;
 }
 
 
-void moveForward() {
-  digitalWrite(pinForward1, HIGH);
-  digitalWrite(pinBackward1, LOW);
-  digitalWrite(pinForward2, HIGH);
-  digitalWrite(pinBackward2, LOW);
+void moveForward(struct robot *robo) {
+  robo->motors.motorLeft->run(FORWARD);
+  robo->motors.motorRight->run(FORWARD);
+  
+  robo->motors.motorLeft->setSpeed(robo->spd);
+  robo->motors.motorRight->setSpeed(robo->spd);
 }
 
-void turnLeft() {
-  digitalWrite(pinForward1, HIGH);
-  digitalWrite(pinBackward1, LOW);
-  digitalWrite(pinForward2, LOW);
-  digitalWrite(pinBackward2, HIGH);
+void turnLeft(struct robot *robo) {
+  robo->motors.motorLeft->run(FORWARD);
+  robo->motors.motorRight->run(BACKWARD);
+  
+  robo->motors.motorLeft->setSpeed(robo->spd);
+  robo->motors.motorRight->setSpeed(robo->spd);
 }
 
-void turnRight() {
-  digitalWrite(pinForward1, LOW);
-  digitalWrite(pinBackward1, HIGH);
-  digitalWrite(pinForward2, HIGH);
-  digitalWrite(pinBackward2, LOW);
+void turnRight(struct robot *robo) {
+  robo->motors.motorLeft->run(BACKWARD);
+  robo->motors.motorRight->run(FORWARD);
+  
+  robo->motors.motorLeft->setSpeed(robo->spd);
+  robo->motors.motorRight->setSpeed(robo->spd);
 }
 
-void stopMotors() {
-  digitalWrite(pinForward1, LOW);
-  digitalWrite(pinBackward1, LOW);
-  digitalWrite(pinForward2, LOW);
-  digitalWrite(pinBackward2, LOW);
+void stopMotors(struct robot *robo) {
+  robo->motors.motorLeft->run(RELEASE);
+  robo->motors.motorRight->run(RELEASE);
+  
+  robo->motors.motorLeft->setSpeed(robo->spd);
+  robo->motors.motorRight->setSpeed(robo->spd);
 }
