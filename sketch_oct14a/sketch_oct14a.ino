@@ -27,8 +27,8 @@ void setup() {
   setNewLineValues(&robo);
 
   // init robo->state
-  robo.state = FREE;
   robo.motors = motors;
+  robo.spd = 128;
   
   Serial.begin(9600);  // start serial for output
   
@@ -36,6 +36,10 @@ void setup() {
 
 
 void loop() { 
+
+  moveForward(&robo);
+  Serial.println("Moving Forward");
+  /*
   switch(robo.state) {
     case FREE:
       handleFreeState(&robo);
@@ -51,7 +55,7 @@ void loop() {
       break;
     default:
       break;
-  } 
+  } */
   
   //Serial.println(robo->state);
 }
@@ -107,9 +111,7 @@ void handleShiftLeftState(struct robot *robo) {
   robo->state = FREE;
 }
 void runLineSensor() {
-  digitalWrite(13, LOW);
   Wire.requestFrom(9, 16);
-  digitalWrite(13, HIGH);
   while (Wire.available()) {
     data[t] = Wire.read();
     if (t < 15) t++;
@@ -145,7 +147,7 @@ boolean verifySequence(struct robot *robo) {
   return 1;
 }
 
-
+/// potentiall problematic
 void moveForward(struct robot *robo) {
   robo->motors.motorLeft->run(FORWARD);
   robo->motors.motorRight->run(FORWARD);
