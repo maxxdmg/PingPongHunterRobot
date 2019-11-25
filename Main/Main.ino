@@ -2,6 +2,7 @@
 #include "robot.h"
 #define uchar unsigned char
 #define COMP1 0
+#define reversetime 240
 
 // initialize line sensor
 uchar t;
@@ -12,10 +13,12 @@ boolean newLineValues[3] = {false, false, false};
 boolean leftVal = false;
 boolean middle = false;
 boolean rightVal = false;
-boolean goalTrigger;
-int goalTriggerPin = 11;
+
+int goalTriggerPin = 9;
 int rightLimitSwitchPin = 10; 
 int leftLimitSwitchPin = 7;
+
+int servoReversePin = 3;
 
 // set up motors
 robotMotors motors;
@@ -26,33 +29,49 @@ void setup() {
   Wire.begin();
   t = 0;
   
-  // set up line sensor data containers
+  // set up line sensor data contaianers
   runLineSensor(); // run line sensor
   setNewLineValues(&robo);
 
   // init robo->state
   robo.motors = motors;
   robo.motors.motorShield.begin();
-  robo.spd = 100;
+  robo.spd = 128;
 
   // set up environmental sensors
-  goalTrigger = false;
+  
   pinMode(goalTriggerPin, INPUT);
   pinMode(rightLimitSwitchPin, INPUT);
   pinMode(leftLimitSwitchPin, INPUT);
   
   Serial.begin(9600);  // start serial for output
-  
 }
 
 
 void loop() {
-  /*
-  for (int i=0; i<16;i+=2) {
-    Serial.print(data[i] + " ");
-  }*/
-  
   switch(robo.state) {
+    case CATCHLINE:
+      runLineSensor();
+      handleErrorLimitSwitches(&robo);
+      // cheeck if a line has been seen
+      if (leftVal || middle || rightVal) {
+        if (leftVal || middle) {
+          turnLeft(&robo);
+        } else if (rightVal) {
+          turnRight(&robo);
+        }
+        while (true) {
+          handleErrorLimitSwitches(&robo);
+          runLineSensor();
+          if (!leftVal && middle && !rightVal) {
+            changeState(&robo, FREE);
+            break;
+          }
+        }
+      } else {
+        moveForward(&robo);  
+      }
+      break;
     case FREE:
       handleFreeState(&robo);
       break;
@@ -68,7 +87,7 @@ void loop() {
     default:
       break;
   }
-  Serial.println(robo.state);
+  //Serial.println(robo.state);
 }
 
 
@@ -86,10 +105,17 @@ void handleFreeState(struct robot *robo) {
 
 
 void handleTriggeredState(struct robot *robo) {
-  if ((!middle && rightVal && leftVal) || (!middle && rightVal && !leftVal)) {
-    changeState(robo, SHIFTRIGHT);
-  } else if (!middle && !rightVal && leftVal) {
+  if (leftVal && middle && rightVal) {
+    zeroTurnLeft(robo);
+    while (leftVal && rightVal) {
+      runLineSensor();
+    }
+    setNewLineValues(robo);
+    changeState(robo, FREE);
+  } else if ((leftVal && !middle && !rightVal) || (leftVal && !middle && rightVal)) {
     changeState(robo, SHIFTLEFT);
+  } else if ((!middle && rightVal && !leftVal)) {
+    changeState(robo, SHIFTRIGHT);
   } else {
     changeState(robo, FREE);
   }
@@ -129,32 +155,30 @@ void handleShiftLeftState(struct robot *robo) {
   zeroTurnLeft(robo);
   int i = 0;
   while(true) {
-    handleErrorLimitSwitches(robo);
-    // timeout action
-    if (i > 1200) {
-      if (i % 100 < 5)
-        turnLeft(robo);
-      else 
-        moveForward(robo);
-      Serial.println("LEFT TIME OUT EXCEEDED");
-    }
-    
+    handleErrorLimitSwitches(robo);    
     // normal action
     runLineSensor();
-    if (middle) {
-      changeState(robo, FREE);
-      break;
-    } /*else if (rightVal) {
-      robo->state = SHIFTRIGHT;
-      break;
-    }*/
-
+    // break condition
+    if (middle) {                    //CHANGE THIS TOMORROW(CAUSES ROBOT TO GET STUCK)
+      if (leftVal && rightVal) {
+        Serial.println("HIT");
+        continue;
+      } else {
+        Serial.println("OTHER");
+        changeState(robo, FREE);
+        break;
+      }
+    } else if(!leftVal && !middle && !rightVal) {
+      changeState(robo, robo->prevState);
+      break; 
+    }
     i++;
   }
   
   stopMotors(robo); // stop motors
   setNewLineValues(robo); // reset line values
 }
+
 void runLineSensor() {
   /*
   for (int i=0; i<16; i+=2) {
@@ -177,7 +201,7 @@ void runLineSensor() {
   newLineValues[0] = leftVal;
   newLineValues[1] = middle;
   newLineValues[2] = rightVal;
-  verifySequence();
+  //verifySequence();
 }
 boolean compareLineValues() {
   for (int i=0; i<3; i++) {
@@ -190,26 +214,71 @@ void setNewLineValues(struct robot *robo) {
   for (int i=0; i<3; i++)
     lineValues[i] = newLineValues[i];
 }
-boolean verifySequence() {
-  if ((lineValues[0] && !lineValues[1] && !lineValues[2]) && (!newLineValues[0] && !newLineValues[1] && newLineValues[2])) {
-    return 0;
-  } else if ((!lineValues[0] && !lineValues[1] && !lineValues[2]) && (newLineValues[0] && !newLineValues[1] && !newLineValues[2])) {
-    return 0;
-  }
-  return 1;
-}
 
 void handleErrorLimitSwitches(struct robot *robo) {
-  if (digitalRead(rightLimitSwitchPin) || digitalRead(leftLimitSwitchPin)) {
-    stopMotors(robo);
-    moveReverse(robo);
-    while(digitalRead(rightLimitSwitchPin) || digitalRead(leftLimitSwitchPin)) {
-      Serial.println("HIT");  
+  // handle goal limit switch
+  if (digitalRead(goalTriggerPin)) {    
+    runLineSensor();
+    // check if robot is not on any line
+    if (!leftVal && !middle && !rightVal) {
+        moveReverse(robo);
+        for (int i=0; i<10; i++) {
+          Serial.println("Reversing from goal trigger at a wall");
+        }
+        // turn 135 degrees, head back to center
+        zeroTurnRight(robo);
+        for (int i=0; i<20; i++) {
+          Serial.println("Turning right to head towards center from goal trigger at a wall");
+        }
+        changeState(robo, CATCHLINE);
+    // otherwise arrived at goal
+    } else {
+      handleGoalLimitSwitch(robo);
+      changeState(robo, FREE);
     }
+  }
+
+  // handle error limit switch
+  while((digitalRead(rightLimitSwitchPin)) || (digitalRead(leftLimitSwitchPin))) {
+    stopMotors(robo);
+    for(int i = 0; i<75; i++){
+      moveReverse(robo);
+    }
+    for (int i=0; i<40; i++) {
+      zeroTurnRight(robo);
+    }
+  }
+
+    /*while(digitalRead(rightLimitSwitchPin) && digitalRead(leftLimitSwitchPin))
+    {
     zeroTurnRight(robo);
     for (int i=0; i<65; i++) {
       Serial.println("TURNING");
     }
+  }
+  */
+}
+
+void handleGoalLimitSwitch(struct robot *robo) {
+  stopMotors(robo);
+  for (int i=0; i<40; i++) {
+    Serial.println("Stopping to shoot from goal trigger at a wall");
+  }
+  moveReverse(robo);
+  for(int i=0; i<20; i++) {
+    Serial.println("Reversing from goal trigger handler");
+  }
+
+  // turn right, 90ish degrees
+  turnRight(robo);
+  for (int i=0; i<20; i++) {
+    Serial.println("Turning right from goal trigger handler");  
+  }
+
+  // move forward
+  moveForward(robo);
+  for (int i=0; i<20; i++) {
+    Serial.println("Moving forward from goal trigger handler");
   }
 }
 
@@ -227,11 +296,13 @@ void moveForward(struct robot *robo) {
 }
 
 void moveReverse(struct robot *robo) {
+  
   robo->motors.motorLeft->run(BACKWARD);
   robo->motors.motorRight->run(BACKWARD);
   
   robo->motors.motorLeft->setSpeed(robo->spd);
   robo->motors.motorRight->setSpeed(robo->spd);
+  
 }
 
 void turnLeft(struct robot *robo) {

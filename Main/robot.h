@@ -13,6 +13,7 @@ struct robotMotors                // All the information needed for motors.  Cou
 };
 
 enum states {
+  CATCHLINE,
   FREE,
   TRIGGERED,
   SHIFTLEFT,
@@ -21,7 +22,7 @@ enum states {
 
 struct robot {
   struct robotMotors motors;      // a struct inside a struct.  Robot now has motors.
-  enum states state = FREE;      // initialize state to this
-  enum states prevState = FREE;
+  enum states state = CATCHLINE;      // initialize state to this
+  enum states prevState = CATCHLINE;
   int spd;
 };
